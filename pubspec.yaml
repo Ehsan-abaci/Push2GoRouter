@@ -1,5 +1,9 @@
 name: push2gorouter
 description: A command-line tool to automatically assist in migrating from Flutter's Navigator 2.0 to the go_router package.
+
+homepage: https://github.com/Ehsan-abaci
+repository: https://github.com/Ehsan-abaci/Push2GoRouter.git
+
 version: 0.0.1
 
 environment:
