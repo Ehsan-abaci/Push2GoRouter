@@ -25,13 +25,13 @@ class HelperFinderVisitor extends RecursiveAstVisitor<void> {
         // Find which parameter of the outer method corresponds to the route name.
         final routeParameter = node.parameters?.parameters
             .where(
-              (p) => p.declaredElement == routeArg.staticElement,
+              (p) => p.declaredFragment == routeArg.element,
             )
             .firstOrNull;
         if (routeParameter != null &&
-            node.declaredElement is ExecutableElement) {
+            node.declaredFragment is ExecutableElement) {
           helpers.add(NavigationHelper(
-            element: node.declaredElement as ExecutableElement,
+            element: node.declaredFragment as ExecutableElement,
             routeNameParameterIndex:
                 node.parameters!.parameters.indexOf(routeParameter),
           ));
@@ -72,7 +72,7 @@ class NavigatorVisitor extends RecursiveAstVisitor<void> {
 
   @override
   void visitMethodInvocation(MethodInvocation node) {
-    final element = node.methodName.staticElement;
+    final element = node.methodName.element;
     if (element == null) {
       super.visitMethodInvocation(node);
       return;
@@ -205,7 +205,7 @@ class NavigatorVisitor extends RecursiveAstVisitor<void> {
             ? node.argumentList.arguments[argOffset]
             : null;
         if (routeArg is InstanceCreationExpression) {
-          final constructorName = routeArg.constructorName.type.name2.lexeme;
+          final constructorName = routeArg.constructorName.type.name.lexeme;
           if (constructorName.contains('Page')) {
             NamedExpression? builderArg;
             try {
@@ -223,10 +223,11 @@ class NavigatorVisitor extends RecursiveAstVisitor<void> {
                   body.expression is InstanceCreationExpression) {
                 final widgetCreation =
                     body.expression as InstanceCreationExpression;
-                targetWidget = widgetCreation.constructorName.type.name2.lexeme;
-                final element = widgetCreation.constructorName.staticElement;
+                targetWidget = widgetCreation.constructorName.type.name.lexeme;
+                final element = widgetCreation.constructorName.element;
                 if (element != null) {
-                  targetFilePath = element.enclosingElement3.source.fullName;
+                  targetFilePath =
+                      element.firstFragment.libraryFragment.source.fullName;
                 }
                 final args = <String, String>{};
                 for (final arg in widgetCreation.argumentList.arguments) {
@@ -288,10 +289,10 @@ class NavigatorVisitor extends RecursiveAstVisitor<void> {
   String? _resolveRouteName(Expression routeArg) {
     if (routeArg is StringLiteral) return routeArg.stringValue;
     if (routeArg is Identifier) {
-      final element = routeArg.staticElement;
+      final element = routeArg.element;
       if (element is PropertyAccessorElement) {
-        final variable = element.variable2;
-        final constValue = variable?.computeConstantValue();
+        final variable = element.variable;
+        final constValue = variable.computeConstantValue();
         if (constValue != null && constValue.hasKnownValue) {
           return constValue.toStringValue();
         }
