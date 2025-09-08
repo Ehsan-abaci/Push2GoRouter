@@ -54,7 +54,7 @@ void main(List<String> args) async {
     if (isDryRun) {
       print('This was a dry run. No files were modified.');
       print('To apply these changes, run the command with the --write flag:');
-      print('  dart run bin/migrate.dart migrate --write');
+      print('  dart run push2gorouter migrate --write');
     } else {
       print('Your source code has been modified.');
     }

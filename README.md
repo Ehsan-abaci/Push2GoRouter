@@ -38,9 +38,9 @@ Run the tool from the root of your Flutter project.
 ### **1\. Previewing Changes (Dry Run)**
 
 First, run the tool in its default "dry run" mode. This will analyze your project and print a report of all the changes it plans to make without actually saving them. This is the recommended first step.
-
+```sh
 dart run push2gorouter migrate
-
+```
 You can also explicitly use the \--dry-run flag:
 
 ```sh

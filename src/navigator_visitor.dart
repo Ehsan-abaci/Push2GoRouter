@@ -1,6 +1,6 @@
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/ast/visitor.dart';
-import 'package:analyzer/dart/element/element.dart';
+import 'package:analyzer/dart/element/element2.dart';
 import 'package:analyzer/source/line_info.dart';
 import 'helper_models.dart';
 import 'models.dart';
@@ -29,9 +29,9 @@ class HelperFinderVisitor extends RecursiveAstVisitor<void> {
             )
             .firstOrNull;
         if (routeParameter != null &&
-            node.declaredFragment is ExecutableElement) {
+            node.declaredFragment is ExecutableElement2) {
           helpers.add(NavigationHelper(
-            element: node.declaredFragment as ExecutableElement,
+            element: node.declaredFragment as ExecutableElement2,
             routeNameParameterIndex:
                 node.parameters!.parameters.indexOf(routeParameter),
           ));
@@ -205,7 +205,7 @@ class NavigatorVisitor extends RecursiveAstVisitor<void> {
             ? node.argumentList.arguments[argOffset]
             : null;
         if (routeArg is InstanceCreationExpression) {
-          final constructorName = routeArg.constructorName.type.name.lexeme;
+          final constructorName = routeArg.constructorName.type.name2.lexeme;
           if (constructorName.contains('Page')) {
             NamedExpression? builderArg;
             try {
@@ -223,7 +223,7 @@ class NavigatorVisitor extends RecursiveAstVisitor<void> {
                   body.expression is InstanceCreationExpression) {
                 final widgetCreation =
                     body.expression as InstanceCreationExpression;
-                targetWidget = widgetCreation.constructorName.type.name.lexeme;
+                targetWidget = widgetCreation.constructorName.type.name2.lexeme;
                 final element = widgetCreation.constructorName.element;
                 if (element != null) {
                   targetFilePath =
@@ -290,9 +290,9 @@ class NavigatorVisitor extends RecursiveAstVisitor<void> {
     if (routeArg is StringLiteral) return routeArg.stringValue;
     if (routeArg is Identifier) {
       final element = routeArg.element;
-      if (element is PropertyAccessorElement) {
-        final variable = element.variable;
-        final constValue = variable.computeConstantValue();
+      if (element is PropertyAccessorElement2) {
+        final variable = element.variable3;
+        final constValue = variable?.computeConstantValue();
         if (constValue != null && constValue.hasKnownValue) {
           return constValue.toStringValue();
         }
