@@ -63,9 +63,11 @@ class Refactorer {
           needsGoRouterImport = true;
           break;
         case 'pushReplacementNamed':
-        case 'pushNamedAndRemoveUntil':
-          newCode = "context.go$typeArgs($routeIdentifier$extra)";
+          newCode = "context.pushReplacement$typeArgs($routeIdentifier$extra)";
           needsGoRouterImport = true;
+          break;
+        case 'pushNamedAndRemoveUntil':
+          newCode = '// TODO: Manual migration for ${inv.methodName}';
           break;
         case 'pop':
           final result = inv.argumentsExpression ?? '';
