@@ -38,9 +38,11 @@ Run the tool from the root of your Flutter project.
 ### **1\. Previewing Changes (Dry Run)**
 
 First, run the tool in its default "dry run" mode. This will analyze your project and print a report of all the changes it plans to make without actually saving them. This is the recommended first step.
+
 ```sh
 dart run push2gorouter migrate
 ```
+
 You can also explicitly use the \--dry-run flag:
 
 ```sh
@@ -154,7 +156,7 @@ final GoRouter router = GoRouter(
 
 - **Dynamic Routes**: Route names that are resolved at runtime from a variable cannot be statically determined. The tool will flag these as 'dynamic_route' and they will require manual migration.
 - **Complex Arguments**: The tool generates // TODO comments for passing arguments (state.extra) to your widgets. You will need to complete this logic by casting to the correct type and passing the data to your widget's constructor.
-- **pushAndRemoveUntil / popAndPushNamed**: These complex navigation patterns are often converted to a context.go() and may require manual review to ensure the navigation stack behavior matches your intent.
+- **pushAndRemoveUntil / popAndPushNamed**: These complex navigation patterns are replaced with a `TODO: Manual migration` and require manual review to ensure the navigation stack behavior matches your intent.
 
 ## **Contributing**
 
