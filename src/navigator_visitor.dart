@@ -1,7 +1,8 @@
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/ast/visitor.dart';
-import 'package:analyzer/dart/element/element2.dart';
+import 'package:analyzer/dart/element/element.dart';
 import 'package:analyzer/source/line_info.dart';
+import 'ast_utils.dart';
 import 'helper_models.dart';
 import 'models.dart';
 
@@ -17,21 +18,19 @@ class HelperFinderVisitor extends RecursiveAstVisitor<void> {
 
     if (navigatorVisitor.foundPushNamedCall != null) {
       final call = navigatorVisitor.foundPushNamedCall!;
-      final routeArg = call.argumentList.arguments.length > 1
-          ? call.argumentList.arguments[1]
-          : null;
+      final routeArg = call.argumentList.positionalAt(1);
 
       if (routeArg is SimpleIdentifier) {
         // Find which parameter of the outer method corresponds to the route name.
         final routeParameter = node.parameters?.parameters
             .where(
-              (p) => p.declaredFragment == routeArg.element,
+              (param) => param.declaredFragment?.element == routeArg.element,
             )
             .firstOrNull;
-        if (routeParameter != null &&
-            node.declaredFragment is ExecutableElement2) {
+        final methodElement = node.declaredFragment?.element;
+        if (routeParameter != null && methodElement != null) {
           helpers.add(NavigationHelper(
-            element: node.declaredFragment as ExecutableElement2,
+            element: methodElement,
             routeNameParameterIndex:
                 node.parameters!.parameters.indexOf(routeParameter),
           ));
@@ -151,90 +150,58 @@ class NavigatorVisitor extends RecursiveAstVisitor<void> {
           effectiveMethodName == 'pushReplacementNamed' ||
           effectiveMethodName == 'pushNamedAndRemoveUntil') {
         final routeNameArgIndex = isHelper ? routeArgIndex : argOffset;
-        if (node.argumentList.arguments.length > routeNameArgIndex) {
-          final routeArg = node.argumentList.arguments[routeNameArgIndex];
+        final routeArg = node.argumentList.positionalAt(routeNameArgIndex);
+        if (routeArg != null) {
           routeNameExpression = routeArg.toSource();
           routeName = _resolveRouteName(routeArg);
-          if (routeName == null) routeName = 'dynamic_route';
+          routeName ??= 'dynamic_route';
         }
-        final argumentsArg = node.argumentList.arguments
-            .whereType<NamedExpression>()
-            .where(
-              (arg) =>
-                  arg.name.label.name == 'arguments' ||
-                  arg.name.label.name == 'extra',
-            )
-            .firstOrNull;
-        if (argumentsArg != null) {
-          argumentsExpression = argumentsArg.expression.toSource();
-          if (argumentsArg.expression is SetOrMapLiteral) {
-            final literal = argumentsArg.expression as SetOrMapLiteral;
-            if (!literal.isSet) {
-              argumentsAreMap = true;
-            }
+        final argumentsValue =
+            node.argumentList.namedAny(const ['arguments', 'extra']);
+        if (argumentsValue != null) {
+          argumentsExpression = argumentsValue.toSource();
+          if (argumentsValue is SetOrMapLiteral && !argumentsValue.isSet) {
+            argumentsAreMap = true;
           }
         }
       } else if (effectiveMethodName == 'popAndPushNamed') {
-        if (node.argumentList.arguments.length > argOffset) {
-          final routeArg = node.argumentList.arguments[argOffset];
+        final routeArg = node.argumentList.positionalAt(argOffset);
+        if (routeArg != null) {
           routeNameExpression = routeArg.toSource();
           routeName = _resolveRouteName(routeArg);
-          if (routeName == null) routeName = 'dynamic_route';
+          routeName ??= 'dynamic_route';
         }
-        final argumentsArg = node.argumentList.arguments
-            .whereType<NamedExpression>()
-            .where(
-              (arg) => arg.name.label.name == 'arguments',
-            )
-            .firstOrNull;
-        if (argumentsArg != null) {
-          argumentsExpression = argumentsArg.expression.toSource();
+        final argumentsValue = node.argumentList.namedAny(const ['arguments']);
+        if (argumentsValue != null) {
+          argumentsExpression = argumentsValue.toSource();
         }
-        final resultArg = node.argumentList.arguments
-            .whereType<NamedExpression>()
-            .where(
-              (arg) => arg.name.label.name == 'result',
-            )
-            .firstOrNull;
-        if (resultArg != null) {
-          resultExpression = resultArg.expression.toSource();
+        final resultValue = node.argumentList.namedAny(const ['result']);
+        if (resultValue != null) {
+          resultExpression = resultValue.toSource();
         }
       } else if (effectiveMethodName == 'push' ||
           effectiveMethodName == 'pushReplacement') {
-        final routeArg = node.argumentList.arguments.length > argOffset
-            ? node.argumentList.arguments[argOffset]
-            : null;
+        final routeArg = node.argumentList.positionalAt(argOffset);
         if (routeArg is InstanceCreationExpression) {
-          final constructorName = routeArg.constructorName.type.name2.lexeme;
+          final constructorName = routeArg.constructorName.type.name.lexeme;
           if (constructorName.contains('Page')) {
-            NamedExpression? builderArg;
-            try {
-              builderArg = routeArg.argumentList.arguments
-                  .whereType<NamedExpression>()
-                  .where((arg) => arg.name.label.name == 'builder')
-                  .firstOrNull;
-            } on StateError {
-              builderArg = null;
-            }
-            if (builderArg != null &&
-                builderArg.expression is FunctionExpression) {
-              final body = (builderArg.expression as FunctionExpression).body;
+            final builderArg = routeArg.argumentList.namedAny(const ['builder']);
+            if (builderArg != null && builderArg is FunctionExpression) {
+              final body = builderArg.body;
               if (body is ExpressionFunctionBody &&
                   body.expression is InstanceCreationExpression) {
                 final widgetCreation =
                     body.expression as InstanceCreationExpression;
-                targetWidget = widgetCreation.constructorName.type.name2.lexeme;
+                targetWidget = widgetCreation.constructorName.type.name.lexeme;
                 final element = widgetCreation.constructorName.element;
                 if (element != null) {
                   targetFilePath =
                       element.firstFragment.libraryFragment.source.fullName;
                 }
                 final args = <String, String>{};
-                for (final arg in widgetCreation.argumentList.arguments) {
-                  if (arg is NamedExpression) {
-                    args[arg.name.label.name] = arg.expression.toSource();
-                  }
-                }
+                widgetCreation.argumentList.named.forEach((name, value) {
+                  args[name] = value.toSource();
+                });
                 if (args.isNotEmpty) {
                   constructorArguments = args;
                 }
@@ -248,17 +215,17 @@ class NavigatorVisitor extends RecursiveAstVisitor<void> {
         }
       } else if (effectiveMethodName == 'pop') {
         routeName = 'N/A';
-        if (node.argumentList.arguments.length > argOffset) {
-          argumentsExpression =
-              node.argumentList.arguments[argOffset].toSource();
+        final resultArg = node.argumentList.positionalAt(argOffset);
+        if (resultArg != null) {
+          argumentsExpression = resultArg.toSource();
         }
       } else if (effectiveMethodName == 'canPop') {
         routeName = 'N/A';
       } else if (effectiveMethodName == 'maybePop') {
         routeName = 'N/A';
-        if (node.argumentList.arguments.length > argOffset) {
-          argumentsExpression =
-              node.argumentList.arguments[argOffset].toSource();
+        final resultArg = node.argumentList.positionalAt(argOffset);
+        if (resultArg != null) {
+          argumentsExpression = resultArg.toSource();
         }
       }
 
@@ -290,12 +257,16 @@ class NavigatorVisitor extends RecursiveAstVisitor<void> {
     if (routeArg is StringLiteral) return routeArg.stringValue;
     if (routeArg is Identifier) {
       final element = routeArg.element;
-      if (element is PropertyAccessorElement2) {
-        final variable = element.variable3;
-        final constValue = variable?.computeConstantValue();
-        if (constValue != null && constValue.hasKnownValue) {
-          return constValue.toStringValue();
-        }
+      VariableElement? variable;
+      if (element is PropertyAccessorElement) {
+        final PropertyInducingElement? v = element.variable;
+        variable = v;
+      } else if (element is VariableElement) {
+        variable = element;
+      }
+      final constValue = variable?.computeConstantValue();
+      if (constValue != null && constValue.hasKnownValue) {
+        return constValue.toStringValue();
       }
     }
     return null;

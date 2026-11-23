@@ -1,4 +1,4 @@
-import 'package:analyzer/dart/element/element2.dart';
+import 'package:analyzer/dart/element/element.dart';
 
 /// Represents a user-defined method that wraps a `Navigator.pushNamed` call.
 ///
@@ -6,7 +6,7 @@ import 'package:analyzer/dart/element/element2.dart';
 /// custom navigation helper functions.
 class NavigationHelper {
   /// The executable element of the declared method.
-  final ExecutableElement2 element;
+  final ExecutableElement element;
 
   /// The index of the parameter in the method signature that holds the route name.
   final int routeNameParameterIndex;

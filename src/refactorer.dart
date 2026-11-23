@@ -42,7 +42,9 @@ class Refactorer {
       return;
     }
     String content = await file.readAsString();
-    fileInvocations.sort((a, b) => b.lineNumber.compareTo(a.lineNumber));
+    // Apply from the end of the file backwards so earlier offsets stay valid,
+    // even when several calls share the same line.
+    fileInvocations.sort((a, b) => b.offset.compareTo(a.offset));
 
     final relativePath = p.relative(filePath, from: projectDirectory.path);
     print('\nRefactoring file: $relativePath');

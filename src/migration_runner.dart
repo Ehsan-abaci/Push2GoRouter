@@ -21,7 +21,22 @@ class MigrationRunner {
   /// If `false`, the tool runs in "dry run" mode.
   final bool applyChanges;
 
-  MigrationRunner({required this.projectDirectory, this.applyChanges = false});
+  /// Whether to rewrite Navigator calls in the source code.
+  ///
+  /// When `false`, only the router file is generated/updated and no
+  /// application source file is touched.
+  final bool refactorSources;
+
+  /// Optional custom path for the router file (absolute, or relative to
+  /// [projectDirectory]). Defaults to `lib/generated_router.dart`.
+  final String? routerFileOverride;
+
+  MigrationRunner({
+    required this.projectDirectory,
+    this.applyChanges = false,
+    this.refactorSources = true,
+    this.routerFileOverride,
+  });
 
   /// Finds the package name from the pubspec.yaml file.
   Future<String?> _getPackageName() async {
@@ -51,7 +66,8 @@ class MigrationRunner {
   /// 3. Parse any existing `go_router` file.
   /// 4. Merge found routes with existing routes.
   /// 5. Generate or update the `generated_router.dart` file.
-  /// 6. Refactor the source code to use `go_router` APIs.
+  /// 6. Refactor the source code to use `go_router` APIs (skipped when
+  ///    [refactorSources] is `false`).
   Future<void> run() async {
     final libDirPath = p.join(projectDirectory.path, 'lib');
     final collection = AnalysisContextCollection(includedPaths: [libDirPath]);
@@ -96,7 +112,9 @@ class MigrationRunner {
       }
     }
 
-    final routerFilePath = p.join(libDirPath, 'generated_router.dart');
+    final routerFilePath = routerFileOverride == null
+        ? p.join(libDirPath, 'generated_router.dart')
+        : p.normalize(p.absolute(p.join(projectDirectory.path, routerFileOverride!)));
     final routerFile = File(routerFilePath);
     List<NavigationInvocation> existingInvocations = [];
     String? existingRouterContent;
@@ -182,10 +200,22 @@ class MigrationRunner {
     } else {
       print('\nGenerating router configuration at $relativePath...');
     }
-    await routerFile.writeAsString(routerCode);
+    if (applyChanges) {
+      await routerFile.parent.create(recursive: true);
+      await routerFile.writeAsString(routerCode);
+    } else {
+      print('Dry run: the router file below was NOT written.');
+      print('--- Preview of $relativePath ---');
+      print(routerCode);
+      print('--- End of preview ---');
+    }
 
-    final refactorer = Refactorer(newlyFoundInvocations, projectDirectory);
-    await refactorer.performRefactoring(dryRun: !applyChanges);
+    if (refactorSources) {
+      final refactorer = Refactorer(newlyFoundInvocations, projectDirectory);
+      await refactorer.performRefactoring(dryRun: !applyChanges);
+    } else {
+      print('Skipping source refactoring (router file only).');
+    }
   }
 
   void _printReport(List<NavigationInvocation> invocations) {

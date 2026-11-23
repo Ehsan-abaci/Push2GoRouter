@@ -63,6 +63,18 @@ After running the command, it's highly recommended to format your code:
 dart format .
 ```
 
+### **3\. Generating the Router Only (No Migration)**
+
+If you only want the `GoRouter` configuration and do **not** want your `Navigator` calls rewritten, use the `generate` command. It scans the project exactly like `migrate`, but never modifies a source file.
+
+```sh
+dart run push2gorouter generate            # preview (dry run)
+dart run push2gorouter generate --write    # write lib/generated_router.dart
+dart run push2gorouter generate --write -o lib/app_router.dart
+```
+
+If the router file already exists it is updated the same way as in `migrate`, preserving routes you edited by hand.
+
 ## **How It Works: The Migration Process**
 
 The tool operates in a series of passes to ensure a comprehensive and safe migration:

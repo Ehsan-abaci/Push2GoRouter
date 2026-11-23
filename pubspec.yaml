@@ -4,7 +4,7 @@ description: A command-line tool to automatically assist in migrating from Flutt
 homepage: https://github.com/Ehsan-abaci
 repository: https://github.com/Ehsan-abaci/Push2GoRouter.git
 
-version: 0.0.4
+version: 1.0.0
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
@@ -13,7 +13,7 @@ executables:
   push2gorouter:
 
 dependencies:
-  analyzer: ">=6.5.0 <7.4.0"
+  analyzer: 14.7.0
   args: ^2.7.0
   path: ^1.9.1
 

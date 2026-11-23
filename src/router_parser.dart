@@ -1,7 +1,8 @@
-import 'package:analyzer/dart/analysis/results.dart';
+import 'dart:io';
 import 'package:analyzer/dart/analysis/utilities.dart';
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/ast/visitor.dart';
+import 'ast_utils.dart';
 import 'models.dart';
 
 /// Parses an existing `generated_router.dart` file to extract its routes.
@@ -11,19 +12,37 @@ import 'models.dart';
 class RouterParser {
   /// Parses the file at the given [filePath] and returns a list of
   /// [NavigationInvocation] objects representing the `GoRoute`s found.
+  ///
+  /// Only the syntax tree is needed, so the file is parsed without
+  /// resolution. In an unresolved tree, `GoRoute(...)` (written without
+  /// `new`/`const`) is a [MethodInvocation] rather than an
+  /// [InstanceCreationExpression]; the visitor handles both.
   Future<List<NavigationInvocation>> parse(String filePath) async {
-    // Resolve the file to get its abstract syntax tree (AST).
-    final result = await resolveFile2(path: filePath);
-    if (result is ResolvedUnitResult) {
-      final invocations = <NavigationInvocation>[];
-      // The visitor will traverse the AST and populate the invocations list.
-      final visitor =
-          _RouterVisitor(filePath: filePath, invocations: invocations);
-      result.unit.accept(visitor);
-      return invocations;
-    }
-    return [];
+    final content = await File(filePath).readAsString();
+    final result = parseString(content: content, path: filePath);
+    final invocations = <NavigationInvocation>[];
+    result.unit.accept(
+        _RouterVisitor(filePath: filePath, invocations: invocations));
+    return invocations;
   }
+}
+
+/// The name and arguments of a constructor-like call, regardless of whether
+/// the parser produced an [InstanceCreationExpression] or a [MethodInvocation].
+class _Creation {
+  final String name;
+  final ArgumentList arguments;
+  _Creation(this.name, this.arguments);
+}
+
+_Creation? _asCreation(Expression? e) {
+  if (e is InstanceCreationExpression) {
+    return _Creation(e.constructorName.type.name.lexeme, e.argumentList);
+  }
+  if (e is MethodInvocation && e.target == null) {
+    return _Creation(e.methodName.name, e.argumentList);
+  }
+  return null;
 }
 
 /// An AST visitor that finds `GoRoute` declarations and reconstructs their info.
@@ -40,84 +59,65 @@ class _RouterVisitor extends RecursiveAstVisitor<void> {
 
   @override
   void visitInstanceCreationExpression(InstanceCreationExpression node) {
-    // We are only interested in expressions that create a 'GoRoute'.
-    if (node.constructorName.type.name2.lexeme == 'GoRoute') {
-      String? routeSegment;
-      String? widgetName;
+    if (!_handle(node)) super.visitInstanceCreationExpression(node);
+  }
 
-      // Find the 'path' argument and get its string value.
-      final pathArg = node.argumentList.arguments
-          .whereType<NamedExpression>()
-          .where(
-            (arg) => arg.name.label.name == 'path',
-          )
-          .firstOrNull;
-      if (pathArg?.expression is StringLiteral) {
-        routeSegment = (pathArg!.expression as StringLiteral).stringValue;
+  @override
+  void visitMethodInvocation(MethodInvocation node) {
+    if (!_handle(node)) super.visitMethodInvocation(node);
+  }
+
+  /// Returns true if [node] was a `GoRoute` (children are then visited
+  /// manually to avoid visiting nodes multiple times).
+  bool _handle(Expression node) {
+    final creation = _asCreation(node);
+    if (creation == null || creation.name != 'GoRoute') return false;
+
+    Expression? namedArg(String name) =>
+        creation.arguments.namedAny([name]);
+
+    String? routeSegment;
+    String? widgetName;
+
+    // Find the 'path' argument and get its string value.
+    final pathExpr = namedArg('path');
+    if (pathExpr is StringLiteral) routeSegment = pathExpr.stringValue;
+
+    // Find the 'builder' argument and extract the widget name from its body.
+    final builderExpr = namedArg('builder');
+    if (builderExpr is FunctionExpression) {
+      final body = builderExpr.body;
+      if (body is ExpressionFunctionBody) {
+        widgetName = _asCreation(body.expression)?.name;
       }
+    }
 
-      // Find the 'builder' argument and extract the widget name from its body.
-      final builderArg = node.argumentList.arguments
-          .whereType<NamedExpression>()
-          .where(
-            (arg) => arg.name.label.name == 'builder',
-          )
-          .firstOrNull;
-      if (builderArg?.expression is FunctionExpression) {
-        final body = (builderArg!.expression as FunctionExpression).body;
-        if (body is ExpressionFunctionBody &&
-            body.expression is InstanceCreationExpression) {
-          final creationExpression =
-              body.expression as InstanceCreationExpression;
-          widgetName = creationExpression.constructorName.type.name2.lexeme;
-        }
-      }
+    if (routeSegment != null) {
+      // Construct the full path for the route, handling nested cases.
+      final currentPath = ('$parentPath/$routeSegment').replaceAll('//', '/');
 
-      if (routeSegment != null) {
-        // Construct the full path for the route, handling nested cases.
-        final currentPath = ('$parentPath/$routeSegment').replaceAll('//', '/');
+      invocations.add(NavigationInvocation(
+        filePath: 'from_router', // Mark as sourced from the router file
+        methodName: 'from_router',
+        routeName: currentPath,
+        targetWidgetName: widgetName,
+        lineNumber: 0,
+        offset: 0,
+        length: 0,
+        originalCode: '',
+        originalCodeBlock: node.toSource(),
+      ));
 
-        // Add a representation of the found route to our list.
-        invocations.add(NavigationInvocation(
-          filePath: 'from_router', // Mark as sourced from the router file
-          methodName: 'from_router',
-          routeName: currentPath,
-          targetWidgetName: widgetName,
-          lineNumber: 0,
-          offset: 0,
-          length: 0,
-          originalCode: '',
-          // Add all nullable fields to match the constructor
-          targetFilePath: null,
-          resultExpression: null,
-          argumentsAreMap: false,
-          argumentsExpression: null,
-          constructorArguments: null,
-          routeNameExpression: null,
-          typeArguments: null,
-          originalCodeBlock: node.toSource(),
+      // Recursively visit nested GoRoutes, passing down the current path.
+      final routesArg = namedArg('routes');
+      if (routesArg != null) {
+        routesArg.accept(_RouterVisitor(
+          filePath: filePath,
+          invocations: invocations,
+          parentPath: currentPath,
         ));
-
-        // Find the 'routes' argument to visit nested GoRoutes.
-        final routesArg = node.argumentList.arguments
-            .whereType<NamedExpression>()
-            .where((arg) => arg.name.label.name == 'routes')
-            .firstOrNull;
-
-        if (routesArg != null) {
-          // Recursively visit children, passing down the current path.
-          routesArg.visitChildren(_RouterVisitor(
-            filePath: filePath,
-            invocations: invocations,
-            parentPath: currentPath,
-          ));
-        }
       }
     }
-
-    // Manually control recursion to avoid visiting nodes multiple times.
-    if (node.constructorName.type.name2.lexeme != 'GoRoute') {
-      super.visitInstanceCreationExpression(node);
-    }
+    return true;
   }
 }
