@@ -13,6 +13,11 @@ import 'package:path/path.dart' as p;
 ///
 /// This class coordinates finding navigation calls, parsing existing router files,
 /// generating a new router configuration, and refactoring the source code.
+///
+/// Set [refactorCode] to `false` to run in "router-only" mode: the
+/// `generated_router.dart` file is still generated/updated, but the source
+/// code refactoring step (step 6) is skipped entirely, so no migration of
+/// Navigator 2.0 calls takes place.
 class MigrationRunner {
   /// The root directory of the Flutter project being migrated.
   final Directory projectDirectory;
@@ -21,7 +26,17 @@ class MigrationRunner {
   /// If `false`, the tool runs in "dry run" mode.
   final bool applyChanges;
 
-  MigrationRunner({required this.projectDirectory, this.applyChanges = false});
+  /// Whether to refactor Navigator 2.0 calls found in the source code.
+  ///
+  /// If `false`, the tool only generates/updates `generated_router.dart`
+  /// and leaves all source files untouched — i.e. no migration is performed.
+  final bool refactorCode;
+
+  MigrationRunner({
+    required this.projectDirectory,
+    this.applyChanges = false,
+    this.refactorCode = true,
+  });
 
   /// Finds the package name from the pubspec.yaml file.
   Future<String?> _getPackageName() async {
@@ -183,6 +198,12 @@ class MigrationRunner {
       print('\nGenerating router configuration at $relativePath...');
     }
     await routerFile.writeAsString(routerCode);
+
+    if (!refactorCode) {
+      print('\nRouter-only mode: skipping source code refactoring.');
+      print('No Navigator 2.0 calls were modified.');
+      return;
+    }
 
     final refactorer = Refactorer(newlyFoundInvocations, projectDirectory);
     await refactorer.performRefactoring(dryRun: !applyChanges);

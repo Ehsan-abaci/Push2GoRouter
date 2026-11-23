@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.0
+
+- Added a `--router-only` flag to the `migrate` command. When passed, the tool generates/updates `lib/generated_router.dart` as usual but skips the source code refactoring step entirely, so no Navigator 2.0 calls are modified.
+
 ## 0.1.0
 
 - Updated the `analyzer` dependency to `^14.7.0`.

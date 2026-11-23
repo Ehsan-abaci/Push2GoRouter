@@ -19,6 +19,7 @@ Manually migrating a large codebase from Navigator.pushNamed and Navigator.push 
 - **Smart Code Refactoring**: Automatically replaces old calls like Navigator.pushNamed(context, '/home') with the modern equivalent context.push('/home') and adds the necessary go_router import.
 - **Safe Dry Run Mode**: Preview all proposed changes in the console without modifying a single file, giving you full control over the migration.
 - **Preservation of Manual Changes**: When updating an existing router file, the tool preserves the original source code of GoRoute blocks it recognizes, ensuring your custom logic is not overwritten.
+- **Router-Only Mode**: Generate or update generated_router.dart without touching your source code, for when you want the router file but aren't ready to migrate your Navigator calls yet.
 
 ## **Installation**
 
@@ -63,6 +64,16 @@ After running the command, it's highly recommended to format your code:
 dart format .
 ```
 
+### **3\. Generating the Router File Only (No Migration)**
+
+If you just want generated_router.dart created or updated — without refactoring any Navigator calls in your source code — use the \--router-only flag. This is handy if you want to adopt go_router incrementally, review the generated routes before touching any call sites, or wire up the router by hand while still letting the tool do the route discovery for you.
+
+```sh
+dart run push2gorouter migrate --router-only
+```
+
+This still performs the full analysis (finding your routes and widgets and merging them with any existing router file), but it stops before the refactoring step, so your Navigator.push, Navigator.pushNamed, etc. calls are left exactly as they are. The \--dry-run and \--write flags have no effect in this mode, since no source files are ever modified.
+
 ## **How It Works: The Migration Process**
 
 The tool operates in a series of passes to ensure a comprehensive and safe migration:
@@ -72,7 +83,7 @@ The tool operates in a series of passes to ensure a comprehensive and safe migra
 3. **Existing Router Parsing**: The tool checks for an existing generated_router.dart file. If found, it parses the file to extract a list of all currently defined GoRoutes. This is crucial for preserving manually added routes.
 4. **Route Merging**: The newly discovered routes from the code scan are intelligently merged with the routes from the existing router file. If a route exists in both places, the tool uses the latest information but preserves the original GoRoute source code block to avoid overwriting custom implementations.
 5. **Router Generation**: The final, merged list of routes is passed to a generator that builds the new GoRouter configuration file. If an old file existed, it performs a surgical replacement of just the routes list to preserve other surrounding code.
-6. **Code Refactoring**: Finally, a refactorer iterates through all the navigation calls found and replaces them in your Dart files with their go_router equivalents (context.push, context.go, context.pop, etc.).
+6. **Code Refactoring**: Finally, a refactorer iterates through all the navigation calls found and replaces them in your Dart files with their go_router equivalents (context.push, context.go, context.pop, etc.). This step is skipped entirely when \--router-only is used.
 
 ## **Example Migration**
 

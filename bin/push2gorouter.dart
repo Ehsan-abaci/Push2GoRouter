@@ -19,7 +19,12 @@ void main(List<String> args) async {
               defaultsTo: true)
           ..addFlag('write',
               negatable: false,
-              help: 'Apply the refactoring changes to the files.'))
+              help: 'Apply the refactoring changes to the files.')
+          ..addFlag('router-only',
+              negatable: false,
+              help: 'Only generate/update lib/generated_router.dart. '
+                  'Skips refactoring Navigator 2.0 calls in your source '
+                  'files, so no migration is performed.'))
     ..addFlag('help',
         abbr: 'h', negatable: false, help: 'Shows usage information.');
 
@@ -33,6 +38,7 @@ void main(List<String> args) async {
   if (argResults.command?.name == 'migrate') {
     final migrateArgs = argResults.command!;
     final isDryRun = migrateArgs['write'] != true;
+    final isRouterOnly = migrateArgs['router-only'] as bool;
 
     final projectDir = Directory.current;
     final libDir = Directory(p.join(projectDir.path, 'lib'));
@@ -46,12 +52,18 @@ void main(List<String> args) async {
 
     print('Starting migration analysis for project at ${projectDir.path}...');
     // The runner now takes the validated lib directory and the project directory separately.
-    final runner =
-        MigrationRunner(projectDirectory: projectDir, applyChanges: !isDryRun);
+    final runner = MigrationRunner(
+      projectDirectory: projectDir,
+      applyChanges: !isDryRun,
+      refactorCode: !isRouterOnly,
+    );
     await runner.run();
 
     print('\nMigration process finished.');
-    if (isDryRun) {
+    if (isRouterOnly) {
+      print('Router-only mode: lib/generated_router.dart was generated/'
+          'updated and your source code was left untouched.');
+    } else if (isDryRun) {
       print('This was a dry run. No files were modified.');
       print('To apply these changes, run the command with the --write flag:');
       print('  dart run push2gorouter migrate --write');
